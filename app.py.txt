@@ -1,0 +1,36 @@
+import numpy as np
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
+import io
+from PIL import Image
+
+app = FastAPI()
+
+# Load the saved model
+model = load_model("alzheimers_model.h5")
+
+@app.get("/")
+def root():
+    return {"message": "Alzheimer's MRI Risk Predictor API is running!"}
+
+@app.post("/predict")
+async def predict(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        img = Image.open(io.BytesIO(contents)).convert("RGB")
+        img = img.resize((224, 224))
+        img_array = image.img_to_array(img) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+
+        prediction = model.predict(img_array)[0][0]
+        result = "Yes" if prediction > 0.5 else "No"
+        risk_percent = round(prediction * 100, 2)
+
+        return {
+            "alzheimers_detected": result,
+            "risk_percentage": risk_percent
+        }
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
